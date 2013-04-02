@@ -47,8 +47,8 @@ public class SshClient {
 	
 	public void connect() throws IOException {
 		if (this.connection == null) {
-			
-			Connection connection = new Connection(this.details.getHost());
+
+			Connection connection = new Connection(this.details.getHost(),this.details.getPort());
 			connection.connect();
 			boolean isAuthenticated = connection.authenticateWithPassword(this.details.getUsername(), this.details.getPassword());
 
@@ -111,7 +111,7 @@ public class SshClient {
 			this.connect();
 			this.sender.write(command.getBytes());
 		} catch (IOException e) {
-			String msg = "Error writing on the ssh channel";
+			String msg = "Error writing on the ssh channel for '" + details.logString() + "'";
 			if (logger.isDebugEnabled()) {
 				logger.debug(msg, e);
 			}

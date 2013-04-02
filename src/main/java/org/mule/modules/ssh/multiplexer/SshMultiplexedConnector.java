@@ -44,7 +44,6 @@ import org.mule.api.annotations.param.Optional;
 import org.mule.api.context.MuleContextAware;
 import org.mule.construct.Flow;
 import org.mule.modules.ssh.multiplexer.exception.CommunicationException;
-import org.mule.session.DefaultMuleSession;
 
 /**
  * Cloud Connector for ssh that is capable to handle multiple session from
@@ -66,15 +65,19 @@ public class SshMultiplexedConnector implements MuleContextAware {
 	private MuleContext muleContext;
 	
 	/**
-	 * IP address for the target host
+	 * IP address for the target host.
+	 * If empty, the connection is considered as DISABLED (see isConnected).
 	 */
 	@Configurable
+	@Optional
 	private String host;
 	
 	/**
 	 * TCP port in which the host is listening
 	 */
 	@Configurable
+	@Optional
+	@Default(value = "22")
 	private int port;
 	
 	/**
@@ -219,8 +222,7 @@ public class SshMultiplexedConnector implements MuleContextAware {
     		
     		MuleMessage message = new DefaultMuleMessage(response, inbound, null, null, this.muleContext);
     		message.setOutboundProperty(SSH_CALLBACK_USER, username);
-    		
-    		MuleEvent event = new DefaultMuleEvent(message, MessageExchangePattern.REQUEST_RESPONSE, new DefaultMuleSession(this.callbackFlow, this.muleContext));
+    		MuleEvent event = new DefaultMuleEvent(message, MessageExchangePattern.REQUEST_RESPONSE, this.callbackFlow);
     		
     		try {
     			this.callbackFlowLookup().process(event).getMessage();
@@ -250,6 +252,7 @@ public class SshMultiplexedConnector implements MuleContextAware {
     
     /**
      * Verifies if the ssh connection associated with the username is connected, or optionally if no data was received for an extended time.
+     * If the host parameter is empty EMPTY_HOST is returned, and can be useful e.g. to disable a certain SSH connection. 
      * It does so by invoking {@link org.mule.modules.ssh.multiplexer.SshConnectionManager.isConnected(String)}
      * {@sample.xml ../../../doc/SshMultiplexedConnector-connector.xml.sample sshmultiplexedconnector:is-connected}
      * 
@@ -257,7 +260,7 @@ public class SshMultiplexedConnector implements MuleContextAware {
      * @param maxtime  - If greater than 0 an additional time check is performed verifying when data was last received on this connection.
      * 					 If data received was longer than maxtime seconds ago, 'STALE' is returned.
      * 					 STALE means UP - but no data was received for a while.
-     * @return UP, DOWN, STALE (if maxtime was provided)
+     * @return UP, DOWN, STALE (if maxtime was provided), EMPTY_HOST (if the host parameter is empty)
      * @see org.mule.modules.ssh.multiplexer.SshConnectionManager.isConnected(String)
      */
     @Processor
@@ -265,7 +268,11 @@ public class SshMultiplexedConnector implements MuleContextAware {
     							@Optional @Default("0") 
     							long maxtime) {
     	String result; 
-    	if (this.connectionManager.isConnected(username)) {
+    	
+    	if (StringUtils.isBlank(this.getHost())) {
+    		result = "DISABLED";
+    	}
+    	else if (this.connectionManager.isConnected(username)) {
         	if (maxtime > 0 && (System.currentTimeMillis() - this.lastCallBack) > (maxtime*1000) ) {
         		result = "STALE";
         	}
@@ -276,7 +283,6 @@ public class SshMultiplexedConnector implements MuleContextAware {
     	else {
     		result = "DOWN";
     	}
-
     	logger.info("Connection '" + username+"@"+this.host + "' is '" + result + "'");
     	return result;
     }

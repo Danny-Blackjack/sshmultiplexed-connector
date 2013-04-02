@@ -20,6 +20,11 @@ public class ResponseConsumerThread extends SshThread {
 
 	private static final Logger logger = Logger.getLogger(ResponseConsumerThread.class);
 	
+	/**
+	 * Platform specific newline character
+	 */
+	private static final String NEWLINE = System.getProperty("line.separator");
+		
 	public ResponseConsumerThread(SshClient client) {
 		super(client);
 	}
@@ -76,22 +81,27 @@ public class ResponseConsumerThread extends SshThread {
 					/* OK, either STDOUT_DATA or STDERR_DATA (or both) is set. */
 				}
 
-				// Don't just check for stdoutReader.ready(), otherwise while(true) loop will be executed continuously until a newline character is encountered.
+				// Rather than calling the callback for each line, call it with a number of buffered lines
+				StringBuffer stdoutCallbackBuffer = new StringBuffer(client.getReceiverBufferSize());
+				// Don't just check for stdoutReader.ready(), otherwise while(true) outer loop will be executed continuously until a newline character is encountered.
 				while (stdout.available() > 0)
 				{
 					// Using buffered reader conveniently reads whole lines.
 					// It blocks until it encounters a new line.
 					String line = stdoutReader.readLine();
 					if (line!=null && line.length()>0) {
-						client.callback(line);
+						stdoutCallbackBuffer.append(line).append(NEWLINE);
 					}
+				}
+				if (stdoutCallbackBuffer.length()>0) {
+					client.callback(stdoutCallbackBuffer.toString());
 				}
 
 				while (stderr.available() > 0)
 				{
 					String line = stderrReader.readLine();
 					if (line!=null && line.length()>0) {
-						logger.warn("Error on connection '" + client.getDetails().getUsername() + "@" + client.getDetails().getHost() + "' : " + line);
+						logger.warn("Error on connection '" + client.getDetails().logString() + "' : " + line);
 						client.callback(line);
 					}
 				}
@@ -102,7 +112,7 @@ public class ResponseConsumerThread extends SshThread {
 		} 
 		finally {
 			// Disconnect properly, releasing resources.
-			logger.warn("Releasing client connection '" + client.getDetails().getUsername() + "@" + client.getDetails().getHost() + "'");
+			logger.warn("Releasing client connection '" + client.getDetails().logString() + "'");
 			client.disconnect();
 		}
 	}

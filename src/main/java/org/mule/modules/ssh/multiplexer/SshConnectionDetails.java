@@ -76,4 +76,10 @@ public class SshConnectionDetails {
 		return ReflectionToStringBuilder.toString(this);
 	}
 	
+	/**
+	 * @return connection detail in format user@host:port
+	 */
+	public String logString() {
+		return this.getUsername() + "@" + this.getHost() + ":" + this.getPort();
+	}
 }
